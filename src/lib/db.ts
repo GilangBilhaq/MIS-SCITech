@@ -7,10 +7,17 @@ let pool: Pool | null = null;
 
 export function getDbPool(): Pool {
   if (!pool) {
+    const isProduction = process.env.NODE_ENV === "production" || connectionString.includes("supabase") || connectionString.includes("pooler");
+
     pool = new Pool({
       connectionString,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
       max: 10,
+      ssl: isProduction
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
     });
     pool.on("error", (err) => {
       console.error("Unexpected error on idle PostgreSQL client", err);
