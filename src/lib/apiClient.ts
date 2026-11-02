@@ -375,6 +375,17 @@ export class ApiClient {
     });
   }
 
+  public static async resetAllData(companyId: string, password: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/api/settings`, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "RESET_ALL_DATA",
+        company_id: companyId,
+        password,
+      }),
+    });
+  }
+
   // Upload
   public static async uploadFile(file: File, type: "compro" | "pitchdeck" | "qris" | "logo"): Promise<{ url: string; filename: string }> {
     const formData = new FormData();

@@ -492,4 +492,41 @@ export class StorageService {
     const list = this.getAnnouncements().filter((a) => a.id !== id);
     this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, list);
   }
+
+  // --- Reset All Operational Data ---
+  public static resetAllData(): void {
+    if (!this.isBrowser()) return;
+    this.setItem(STORAGE_KEYS.WORKLOGS, []);
+    this.setItem(STORAGE_KEYS.MONTHLY_PLANS, []);
+    this.setItem(STORAGE_KEYS.KPIS, []);
+    this.setItem(STORAGE_KEYS.PROJECTS, []);
+    this.setItem(STORAGE_KEYS.TRANSACTIONS, []);
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, []);
+    this.setItem(STORAGE_KEYS.USERS, [
+      {
+        id: "USR-001",
+        company_id: "sci-tech-01",
+        nama_lengkap: "Farhan Pratama",
+        panggilan: "Farhan",
+        role: "CEO_ADMIN",
+        divisi: "Executive Management",
+        jabatan: "CEO & Managing Director",
+        pin_code: "556677",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: "USR-002",
+        company_id: "sci-tech-01",
+        nama_lengkap: "Anisa Rahmawati",
+        panggilan: "Anisa",
+        role: "FINANCE_ADMIN",
+        divisi: "Finance & Accounting",
+        jabatan: "Finance Lead",
+        pin_code: "778899",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  }
 }

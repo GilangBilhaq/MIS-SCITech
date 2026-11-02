@@ -70,3 +70,57 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: false, error: err }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { action, company_id, password } = body;
+    const compId = company_id || "sci-tech-01";
+
+    if (action === "RESET_ALL_DATA") {
+      // Verifikasi password manajemen
+      const defaultPw = "admin123";
+      if (!password || (password !== defaultPw && password !== "556677")) {
+        return NextResponse.json(
+          { success: false, message: "Kata sandi manajemen tidak valid." },
+          { status: 401 }
+        );
+      }
+
+      // Bersihkan seluruh data operasional di PostgreSQL
+      await query(`TRUNCATE TABLE worklogs CASCADE`);
+      await query(`TRUNCATE TABLE monthly_plans CASCADE`);
+      await query(`TRUNCATE TABLE kpi_evaluations CASCADE`);
+      await query(`TRUNCATE TABLE rab_items CASCADE`);
+      await query(`TRUNCATE TABLE projects CASCADE`);
+      await query(`TRUNCATE TABLE rab_projects CASCADE`);
+      await query(`TRUNCATE TABLE transactions CASCADE`);
+      await query(`TRUNCATE TABLE announcements CASCADE`);
+      await query(`TRUNCATE TABLE users CASCADE`);
+
+      // Sisakan 1 Akun Utama CEO_ADMIN agar tetap bisa login
+      await query(`
+        INSERT INTO users (id, company_id, nama_lengkap, panggilan, email, role, divisi, jabatan, pin_code, is_active)
+        VALUES ('USR-001', $1, 'Farhan Pratama', 'Farhan', 'ceo@scitech.id', 'CEO_ADMIN', 'Executive Management', 'CEO & Managing Director', '556677', true)
+        ON CONFLICT (id) DO UPDATE SET is_active = true
+      `, [compId]);
+
+      // Sisakan 1 Akun Utama Finance
+      await query(`
+        INSERT INTO users (id, company_id, nama_lengkap, panggilan, email, role, divisi, jabatan, pin_code, is_active)
+        VALUES ('USR-002', $1, 'Anisa Rahmawati', 'Anisa', 'finance@scitech.id', 'FINANCE_ADMIN', 'Finance & Accounting', 'Finance Lead', '778899', true)
+        ON CONFLICT (id) DO UPDATE SET is_active = true
+      `, [compId]);
+
+      return NextResponse.json({
+        success: true,
+        message: "Seluruh data dummy operasional berhasil dihapus bersih dari database.",
+      });
+    }
+
+    return NextResponse.json({ success: false, message: "Aksi tidak dikenali." }, { status: 400 });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ success: false, error: err }, { status: 500 });
+  }
+}
