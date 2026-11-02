@@ -99,8 +99,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, message: "ID anggota diperlukan." }, { status: 400 });
     }
 
+    // Cascade delete relasi data anggota sebelum menghapus profil user
+    await query(`DELETE FROM worklogs WHERE user_id = $1`, [id]);
+    await query(`DELETE FROM monthly_plans WHERE user_id = $1`, [id]);
+    await query(`DELETE FROM kpi_evaluations WHERE user_id = $1`, [id]);
+
     await query(`DELETE FROM users WHERE id = $1`, [id]);
-    return NextResponse.json({ success: true, message: "Anggota tim berhasil dihapus permanen." });
+    return NextResponse.json({ success: true, message: "Anggota tim beserta riwayat terkait berhasil dihapus permanen." });
   } catch (error: unknown) {
     const err = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ success: false, error: err }, { status: 500 });
