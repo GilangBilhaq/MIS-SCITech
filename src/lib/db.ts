@@ -1,24 +1,31 @@
 import { Pool } from "pg";
 
-const connectionString =
-  process.env.DATABASE_URL || "postgresql://postgres:gIlang6*@localhost:5432/db_mis";
-
 let pool: Pool | null = null;
 
 export function getDbPool(): Pool {
   if (!pool) {
-    const isProduction = process.env.NODE_ENV === "production" || connectionString.includes("supabase") || connectionString.includes("pooler");
+    const rawUrl = process.env.DATABASE_URL || "postgresql://postgres:gIlang6*@localhost:5432/db_mis";
+    // Strip sslmode from query string if present because pg driver handles it via ssl object
+    const cleanUrl = rawUrl.replace(/([&?])sslmode=[^&]+(&|$)/, "$1").replace(/[?&]$/, "");
+
+    const isRemoteDb =
+      process.env.NODE_ENV === "production" ||
+      cleanUrl.includes("supabase") ||
+      cleanUrl.includes("pooler") ||
+      cleanUrl.includes("amazonaws.com") ||
+      !cleanUrl.includes("localhost");
 
     pool = new Pool({
-      connectionString,
+      connectionString: cleanUrl,
       connectionTimeoutMillis: 10000,
       max: 10,
-      ssl: isProduction
+      ssl: isRemoteDb
         ? {
             rejectUnauthorized: false,
           }
-        : undefined,
+        : false,
     });
+
     pool.on("error", (err) => {
       console.error("Unexpected error on idle PostgreSQL client", err);
     });
