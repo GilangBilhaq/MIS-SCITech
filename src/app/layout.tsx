@@ -17,7 +17,12 @@ export const metadata: Metadata = {
   description:
     "Sistem Informasi Manajemen B2B Multi-Tenant untuk Operasional, Finansial, Proyek, dan Kinerja SCI Tech.",
   icons: {
-    icon: "/branding/sci-tech-icon.png",
+    icon: [
+      { url: "/branding/sci-tech-icon.png", type: "image/png" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/branding/sci-tech-icon.png",
+    apple: "/branding/sci-tech-icon.png",
   },
 };
 
