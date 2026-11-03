@@ -23,6 +23,7 @@ import { ApiClient } from "@/lib/apiClient";
 import { PinVerificationModal } from "@/components/modals/PinVerificationModal";
 import { Toast } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface WorklogViewProps {
   config: TenantConfig;
@@ -138,7 +139,7 @@ export const WorklogView: React.FC<WorklogViewProps> = ({
     setEditingWorklog(w);
     setFormUserId(w.user_id);
     setFormPlanId(w.plan_id || "NONE");
-    setFormTanggal(w.tanggal);
+    setFormTanggal(w.tanggal ? w.tanggal.split("T")[0] : "");
     setFormJam(String(w.jam_durasi));
     setFormKategori(w.kategori);
     setFormPekerjaan(w.pekerjaan);
@@ -509,7 +510,7 @@ export const WorklogView: React.FC<WorklogViewProps> = ({
                       <td className="py-3 px-4 text-slate-600 whitespace-nowrap font-mono text-[11px]">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{w.tanggal}</span>
+                          <span>{formatDateIndo(w.tanggal)}</span>
                         </span>
                       </td>
                       <td className="py-3 px-4 text-slate-900 font-bold whitespace-nowrap">

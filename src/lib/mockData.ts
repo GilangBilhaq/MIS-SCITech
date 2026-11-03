@@ -79,8 +79,8 @@ export const initialUsers: User[] = [
   {
     id: "USR-006",
     company_id: "sci-tech-01",
-    nama_lengkap: "Anisa Rahmawati",
-    panggilan: "Anisa",
+    nama_lengkap: "Admin Keuangan",
+    panggilan: "Finance",
     role: "FINANCE_ADMIN",
     divisi: "Finance & Accounting",
     jabatan: "Finance Lead & Controller",

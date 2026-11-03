@@ -100,15 +100,15 @@ export async function POST(request: Request) {
 
       // Sisakan 1 Akun Utama CEO_ADMIN agar tetap bisa login
       await query(`
-        INSERT INTO users (id, company_id, nama_lengkap, panggilan, email, role, divisi, jabatan, pin_code, is_active)
-        VALUES ('USR-001', $1, 'Farhan Pratama', 'Farhan', 'ceo@scitech.id', 'CEO_ADMIN', 'Executive Management', 'CEO & Managing Director', '556677', true)
+        INSERT INTO users (id, company_id, nama_lengkap, panggilan, role, divisi, jabatan, pin_code, is_active)
+        VALUES ('USR-001', $1, 'Farhan Pratama', 'Farhan', 'CEO_ADMIN', 'Executive Management', 'CEO & Managing Director', '556677', true)
         ON CONFLICT (id) DO UPDATE SET is_active = true
       `, [compId]);
 
       // Sisakan 1 Akun Utama Finance
       await query(`
-        INSERT INTO users (id, company_id, nama_lengkap, panggilan, email, role, divisi, jabatan, pin_code, is_active)
-        VALUES ('USR-002', $1, 'Anisa Rahmawati', 'Anisa', 'finance@scitech.id', 'FINANCE_ADMIN', 'Finance & Accounting', 'Finance Lead', '778899', true)
+        INSERT INTO users (id, company_id, nama_lengkap, panggilan, role, divisi, jabatan, pin_code, is_active)
+        VALUES ('USR-002', $1, 'Admin Keuangan', 'Finance', 'FINANCE_ADMIN', 'Finance & Accounting', 'Finance Lead', '123456', true)
         ON CONFLICT (id) DO UPDATE SET is_active = true
       `, [compId]);
 

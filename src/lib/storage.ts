@@ -76,7 +76,9 @@ export class StorageService {
 
   // --- Users & PIN Management ---
   public static getUsers(): User[] {
-    return this.getItem<User[]>(STORAGE_KEYS.USERS, initialUsers);
+    const raw = this.getItem<User[]>(STORAGE_KEYS.USERS, initialUsers);
+    // Pastikan tidak ada duplikasi ID yang lolos ke state
+    return Array.from(new Map(raw.map((u) => [u.id, u])).values());
   }
 
   public static getUserById(id: string): User | undefined {
@@ -145,9 +147,25 @@ export class StorageService {
     return { user: fallbackUser, newPin: pin };
   }
 
+  public static setUsers(users: User[]): void {
+    const uniqueUsers = Array.from(new Map(users.map((u) => [u.id, u])).values());
+    this.setItem(STORAGE_KEYS.USERS, uniqueUsers);
+  }
+
   public static addUser(data: Omit<User, "id" | "created_at" | "is_active">): User {
     const users = this.getUsers();
-    const newId = `USR-${String(users.length + 1).padStart(3, "0")}`;
+    // Cari index numerik tertinggi agar tidak terjadi tabrakan ID
+    const maxNum = users.reduce((max, u) => {
+      const match = u.id && u.id.match(/\d+/);
+      const num = match ? parseInt(match[0], 10) : 0;
+      return Math.max(max, num);
+    }, 0);
+    let counter = maxNum + 1;
+    let newId = `USR-${String(counter).padStart(3, "0")}`;
+    while (users.some((u) => u.id === newId)) {
+      counter++;
+      newId = `USR-${String(counter).padStart(3, "0")}`;
+    }
     const newUser: User = {
       ...data,
       id: newId,
@@ -197,6 +215,10 @@ export class StorageService {
     return this.getItem<Worklog[]>(STORAGE_KEYS.WORKLOGS, initialWorklogs);
   }
 
+  public static setWorklogs(worklogs: Worklog[]): void {
+    this.setItem(STORAGE_KEYS.WORKLOGS, worklogs);
+  }
+
   public static addWorklog(data: Omit<Worklog, "id" | "created_at" | "pin_verified">): Worklog {
     const list = this.getWorklogs();
     const newWorklog: Worklog = {
@@ -229,6 +251,10 @@ export class StorageService {
   // --- Monthly Plans ---
   public static getMonthlyPlans(): MonthlyPlan[] {
     return this.getItem<MonthlyPlan[]>(STORAGE_KEYS.MONTHLY_PLANS, initialMonthlyPlans);
+  }
+
+  public static setMonthlyPlans(plans: MonthlyPlan[]): void {
+    this.setItem(STORAGE_KEYS.MONTHLY_PLANS, plans);
   }
 
   public static addMonthlyPlan(data: Omit<MonthlyPlan, "id" | "created_at">): MonthlyPlan {
@@ -273,6 +299,10 @@ export class StorageService {
 
   public static getTransactions(): Transaction[] {
     return this.getItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, initialTransactions);
+  }
+
+  public static setTransactions(transactions: Transaction[]): void {
+    this.setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
   }
 
   public static addTransaction(data: Omit<Transaction, "id" | "created_at" | "total_harga">): Transaction {
@@ -337,6 +367,10 @@ export class StorageService {
   // --- Projects ---
   public static getProjects(): Project[] {
     return this.getItem<Project[]>(STORAGE_KEYS.PROJECTS, initialProjects);
+  }
+
+  public static setProjects(projects: Project[]): void {
+    this.setItem(STORAGE_KEYS.PROJECTS, projects);
   }
 
   public static addProject(data: Omit<Project, "id" | "created_at">): Project {
@@ -432,6 +466,10 @@ export class StorageService {
     return this.getItem<KpiEvaluation[]>(STORAGE_KEYS.KPIS, initialKpis);
   }
 
+  public static setKpis(kpis: KpiEvaluation[]): void {
+    this.setItem(STORAGE_KEYS.KPIS, kpis);
+  }
+
   public static addKpi(data: Omit<KpiEvaluation, "id" | "created_at">): KpiEvaluation {
     const list = this.getKpis();
     const newKpi: KpiEvaluation = {
@@ -463,6 +501,10 @@ export class StorageService {
   // --- Announcements ---
   public static getAnnouncements(): Announcement[] {
     return this.getItem<Announcement[]>(STORAGE_KEYS.ANNOUNCEMENTS, initialAnnouncements);
+  }
+
+  public static setAnnouncements(announcements: Announcement[]): void {
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, announcements);
   }
 
   public static addAnnouncement(data: Omit<Announcement, "id" | "created_at">): Announcement {
@@ -518,12 +560,12 @@ export class StorageService {
       {
         id: "USR-002",
         company_id: "sci-tech-01",
-        nama_lengkap: "Anisa Rahmawati",
-        panggilan: "Anisa",
+        nama_lengkap: "Admin Keuangan",
+        panggilan: "Finance",
         role: "FINANCE_ADMIN",
         divisi: "Finance & Accounting",
         jabatan: "Finance Lead",
-        pin_code: "778899",
+        pin_code: "123456",
         is_active: true,
         created_at: new Date().toISOString(),
       },

@@ -14,7 +14,7 @@ export async function GET(request: Request) {
              u.nama_lengkap as user_nama,
              u.divisi as user_divisi,
              COUNT(w.id)::int as total_worklogs,
-             COALESCE(SUM(w.jam_durasi), 0)::numeric(5,1) as total_jam_tercatat
+             COALESCE(SUM(w.jam_durasi), 0)::float as total_jam_tercatat
       FROM monthly_plans mp
       LEFT JOIN users u ON mp.user_id = u.id
       LEFT JOIN worklogs w ON w.plan_id = mp.id

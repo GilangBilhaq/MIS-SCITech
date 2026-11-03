@@ -147,8 +147,8 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline text-xs font-medium text-slate-600 truncate max-w-[120px]">
-              {userName || "Pengguna Aktif"}
+            <span className="hidden sm:inline text-xs font-medium text-slate-600 truncate max-w-[160px]">
+              {userName ? userName.replace(/\s*\(Farhan\)/gi, "").trim() : "Pengguna Aktif"}
             </span>
             <button
               onClick={onLogout}

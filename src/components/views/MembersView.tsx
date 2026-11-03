@@ -31,6 +31,7 @@ import { StorageService } from "@/lib/storage";
 import { ApiClient } from "@/lib/apiClient";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface MembersViewProps {
   config: TenantConfig;
@@ -92,10 +93,13 @@ export const MembersView: React.FC<MembersViewProps> = ({
   const [formPin, setFormPin] = useState(StorageService.generateRandomPin());
   const [formPassword, setFormPassword] = useState(generateRandomPassword());
 
-  // Distinct divisions list with count
-  const divisions = ["ALL", ...Array.from(new Set(users.map((u) => u.divisi).filter(Boolean)))];
+  // Deduplikasi anggota berdasarkan ID unik agar tidak terjadi duplicate key
+  const uniqueUsers = Array.from(new Map(users.map((u) => [u.id, u])).values());
 
-  const filtered = users.filter((u) => {
+  // Distinct divisions list with count
+  const divisions = ["ALL", ...Array.from(new Set(uniqueUsers.map((u) => u.divisi).filter(Boolean)))];
+
+  const filtered = uniqueUsers.filter((u) => {
     const matchesSearch =
       u.nama_lengkap.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.divisi.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -158,18 +162,18 @@ export const MembersView: React.FC<MembersViewProps> = ({
       setFormPin(user.pin_code || StorageService.generateRandomPin());
       setFormPassword(generateRandomPassword());
     } else {
-      // Role FINANCE_ADMIN
-      setFormPassword(user.pin_code || generateRandomPassword());
-      // Siapkan PIN angka acak jika user nanti beralih ke role STAFF
-      setFormPin(StorageService.generateRandomPin());
+      // Role FINANCE_ADMIN: Tampilkan password portal dan 6-digit PIN untuk worklog
+      const currentFinancePw = StorageService.getFinanceSettings().finance_password_hash || config.security.financePasswordDefault || "keuangan123";
+      setFormPassword(currentFinancePw);
+      setFormPin(user.pin_code && /^\d{6}$/.test(user.pin_code) ? user.pin_code : StorageService.generateRandomPin());
     }
 
     setIsAddModalOpen(true);
   };
 
   const handleGeneratePin = async (user: User) => {
-    const isStaff = user.role === "STAFF";
-    const newCredential = isStaff ? StorageService.generateRandomPin() : generateRandomPassword();
+    // Selalu buatkan PIN 6-digit angka agar verifikasi worklog & approval berjalan lancar
+    const newCredential = StorageService.generateRandomPin();
     try {
       await ApiClient.updateUser({ id: user.id, pin_code: newCredential });
     } catch {
@@ -180,7 +184,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
     setCopiedPinId(user.id);
     setToastNotif({
       type: "success",
-      message: `${isStaff ? `PIN 6-digit baru (${newCredential})` : `Kata sandi portal baru (${newCredential})`} untuk ${user.nama_lengkap} berhasil dibuat dan disalin ke clipboard!`,
+      message: `PIN 6-digit baru (${newCredential}) untuk ${user.nama_lengkap} berhasil dibuat dan disalin ke clipboard!`,
     });
     setTimeout(() => {
       setCopiedPinId(null);
@@ -230,20 +234,22 @@ export const MembersView: React.FC<MembersViewProps> = ({
       divisi: formDivisi,
       jabatan: formJabatan,
       role: formRole,
-      pin_code: formRole === "STAFF" ? formPin : formPassword,
+      pin_code: formPin,
     };
 
-    try {
-      if (editingUser) {
-        await ApiClient.updateUser({ id: editingUser.id, ...payload });
-      } else {
-        await ApiClient.createUser(payload);
-      }
-    } catch (err) {
-      console.warn("API update user deferred to local storage:", err);
+    // Jika role Finance Admin dan password portal diisi, simpan ke finance settings
+    if (formRole === "FINANCE_ADMIN" && formPassword) {
+      StorageService.updateFinanceSettings({ finance_password_hash: formPassword });
+      try {
+        ApiClient.updateSettings({
+          type: "FINANCE",
+          company_id: config.id,
+          financeData: { finance_password_hash: formPassword },
+        });
+      } catch {}
     }
 
-    // Always update local storage cache
+    // Optimistic UI Update: Langsung tutup modal dan perbarui data lokal dalam milidetik
     if (editingUser) {
       StorageService.updateUser(editingUser.id, payload);
     } else {
@@ -256,12 +262,25 @@ export const MembersView: React.FC<MembersViewProps> = ({
       message: editingUser
         ? `Data anggota ${formNama} berhasil diperbarui.`
         : `Anggota ${formNama} berhasil didaftarkan ke sistem dengan ${
-            formRole === "STAFF" ? `PIN: ${formPin}` : `Password: ${formPassword}`
+            formRole === "STAFF"
+              ? `PIN: ${formPin}`
+              : `Password: ${formPassword} & PIN: ${formPin}`
           }`,
     });
     setEditingUser(null);
     setFormNama("");
     onRefresh();
+
+    // Jalankan API call sinkronisasi database di background
+    try {
+      if (editingUser) {
+        await ApiClient.updateUser({ id: editingUser.id, ...payload });
+      } else {
+        await ApiClient.createUser(payload);
+      }
+    } catch (err) {
+      console.warn("API update user deferred to local storage:", err);
+    }
   };
 
   const handleDeletePermanent = (id: string, name: string) => {
@@ -272,17 +291,20 @@ export const MembersView: React.FC<MembersViewProps> = ({
       confirmLabel: "Ya, Hapus Permanen",
       type: "danger",
       onConfirm: async () => {
-        try {
-          await ApiClient.deleteUser(id);
-        } catch {
-          StorageService.deleteUser(id);
-        }
+        // Optimistic UI: hapus langsung dari local storage dan refresh UI seketika
+        StorageService.deleteUser(id);
         setToastNotif({
           type: "success",
           message: `Data anggota ${name} berhasil dihapus dari sistem.`,
         });
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         onRefresh();
+
+        try {
+          await ApiClient.deleteUser(id);
+        } catch {
+          // Handled
+        }
       },
     });
   };
@@ -298,7 +320,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
       `"${u.jabatan.replace(/"/g, '""')}"`,
       u.role,
       u.is_active ? "Aktif" : "Non-Aktif",
-      u.created_at || "-",
+      formatDateIndo(u.created_at),
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -349,6 +371,9 @@ export const MembersView: React.FC<MembersViewProps> = ({
         );
     }
   };
+
+  const financeSettings = StorageService.getFinanceSettings();
+  const financePassword = financeSettings.finance_password_hash || config.security.financePasswordDefault || "keuangan123";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -513,9 +538,10 @@ export const MembersView: React.FC<MembersViewProps> = ({
         </div>
       </div>
 
-      {/* Members Table */}
+      {/* Members Container: Desktop Table & Mobile Cards */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop View: Tabel Komprehensif */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -536,12 +562,12 @@ export const MembersView: React.FC<MembersViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filtered.map((user) => {
+                filtered.map((user, idx) => {
                   const isPinVisible = !!visiblePins[user.id];
                   const isStaff = user.role === "STAFF";
 
                   return (
-                    <tr key={user.id} className="hover:bg-slate-50/70 transition-colors group">
+                    <tr key={`${user.id}-${idx}`} className="hover:bg-slate-50/70 transition-colors group">
                       {/* Name & ID with Clickable Profile Card */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
@@ -587,32 +613,87 @@ export const MembersView: React.FC<MembersViewProps> = ({
 
                       {/* Security Credential (PIN vs Password Context) */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-slate-900 tracking-wider">
-                            {isPinVisible ? user.pin_code : isStaff ? "••••••" : "••••••••••"}
-                          </span>
-                          <button
-                            onClick={() => togglePinVisibility(user.id)}
-                            className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                            title={isStaff ? "Lihat / Sembunyikan PIN" : "Lihat / Sembunyikan Sandi"}
-                          >
-                            {isPinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => handleCopyPin(user)}
-                            className="text-slate-400 hover:text-blue-600 p-1 cursor-pointer"
-                            title={isStaff ? "Salin PIN" : "Salin Sandi"}
-                          >
-                            {copiedPinId === user.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                        <p className="text-[9px] text-slate-400 mt-0.5">
-                          {isStaff ? "PIN 6-Digit Worklog" : "Password Portal Akses"} • Diperbarui: {user.pin_last_updated || "Baru"}
-                        </p>
+                        {isStaff ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-slate-900 tracking-wider">
+                                {isPinVisible ? user.pin_code : "••••••"}
+                              </span>
+                              <button
+                                onClick={() => togglePinVisibility(user.id)}
+                                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                                title="Lihat / Sembunyikan PIN"
+                              >
+                                {isPinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={() => handleCopyPin(user)}
+                                className="text-slate-400 hover:text-blue-600 p-1 cursor-pointer"
+                                title="Salin PIN"
+                              >
+                                {copiedPinId === user.id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-slate-400 mt-0.5">
+                              PIN 6-Digit Worklog • Diperbarui: {user.pin_last_updated ? formatDateIndo(user.pin_last_updated) : "Baru"}
+                            </p>
+                          </>
+                        ) : (
+                          <div className="space-y-1">
+                            {/* Password Portal */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-400 w-12">Portal:</span>
+                              <span className="font-mono font-bold text-slate-900 text-[11px] tracking-wide">
+                                {isPinVisible ? financePassword : "••••••••••"}
+                              </span>
+                              <button
+                                onClick={() => togglePinVisibility(user.id)}
+                                className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                                title="Lihat / Sembunyikan Password"
+                              >
+                                {isPinVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(financePassword);
+                                  setCopiedPinId(`${user.id}-pw`);
+                                  setTimeout(() => setCopiedPinId(null), 2000);
+                                }}
+                                className="text-slate-400 hover:text-blue-600 p-0.5 cursor-pointer"
+                                title="Salin Password Portal"
+                              >
+                                {copiedPinId === `${user.id}-pw` ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                            {/* PIN Worklog */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-400 w-12">PIN:</span>
+                              <span className="font-mono font-bold text-indigo-700 text-[11px] tracking-wider">
+                                {isPinVisible ? user.pin_code : "••••••"}
+                              </span>
+                              <button
+                                onClick={() => handleCopyPin(user)}
+                                className="text-slate-400 hover:text-blue-600 p-0.5 cursor-pointer"
+                                title="Salin PIN"
+                              >
+                                {copiedPinId === user.id ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-slate-400">PIN untuk worklog/monthly plan</p>
+                          </div>
+                        )}
                       </td>
 
                       {/* Generator Button */}
@@ -620,10 +701,10 @@ export const MembersView: React.FC<MembersViewProps> = ({
                         <button
                           onClick={() => handleGeneratePin(user)}
                           className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-50 text-slate-700 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer"
-                          title={isStaff ? "Buat PIN 6-digit acak baru" : "Buat kata sandi portal baru"}
+                          title="Buat PIN 6-digit acak baru"
                         >
                           <RefreshCw className="w-3 h-3 text-blue-600" />
-                          <span>{isStaff ? "Generate PIN Acak" : "Generate Sandi Baru"}</span>
+                          <span>Generate PIN Acak</span>
                         </button>
                       </td>
 
@@ -679,6 +760,202 @@ export const MembersView: React.FC<MembersViewProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View: Tampilan Kartu Responsif Khusus Mode Ponsel (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filtered.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 px-4">
+              <Users className="w-10 h-10 mx-auto stroke-1 mb-2 text-slate-300" />
+              <p className="font-semibold text-xs">Tidak ada data anggota yang cocok dengan filter.</p>
+            </div>
+          ) : (
+            filtered.map((user, idx) => {
+              const isPinVisible = !!visiblePins[user.id];
+              const isStaff = user.role === "STAFF";
+
+              return (
+                <div key={`${user.id}-${idx}`} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
+                  {/* Header: Avatar, Nama, ID & Status */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewUser(user)}
+                        className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs"
+                      >
+                        {user.nama_lengkap.slice(0, 2).toUpperCase()}
+                      </button>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">{user.nama_lengkap}</h4>
+                          {user.panggilan && (
+                            <span className="text-[10px] text-slate-400 font-mono">({user.panggilan})</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-mono">{user.id} • {user.divisi}</p>
+                      </div>
+                    </div>
+                    <div>
+                      {user.is_active ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          Aktif
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                          Non-Aktif
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Jabatan & Role Badge */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-xs font-semibold text-slate-700">{user.jabatan}</span>
+                    {renderRoleBadge(user.role)}
+                  </div>
+
+                  {/* Kredensial Keamanan (PIN & Password) */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Kredensial Keamanan
+                      </span>
+                      <button
+                        onClick={() => togglePinVisibility(user.id)}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        {isPinVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{isPinVisible ? "Sembunyikan" : "Tampilkan"}</span>
+                      </button>
+                    </div>
+
+                    {isStaff ? (
+                      <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-medium">PIN 6-Digit Worklog</p>
+                          <p className="font-mono font-bold text-slate-900 text-sm tracking-widest">
+                            {isPinVisible ? user.pin_code : "••••••"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleCopyPin(user)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 rounded-md hover:bg-slate-100"
+                          title="Salin PIN"
+                        >
+                          {copiedPinId === user.id ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Password Portal */}
+                        <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
+                          <div>
+                            <p className="text-[10px] text-slate-500 font-medium">Password Portal Keuangan</p>
+                            <p className="font-mono font-bold text-slate-900 text-xs">
+                              {isPinVisible ? financePassword : "••••••••••"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(financePassword);
+                              setCopiedPinId(`${user.id}-pw`);
+                              setTimeout(() => setCopiedPinId(null), 2000);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded-md hover:bg-slate-100"
+                            title="Salin Password"
+                          >
+                            {copiedPinId === `${user.id}-pw` ? (
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                        {/* PIN 6-Digit */}
+                        <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
+                          <div>
+                            <p className="text-[10px] text-slate-500 font-medium">PIN 6-Digit (Worklog & Approval)</p>
+                            <p className="font-mono font-bold text-indigo-700 text-xs tracking-wider">
+                              {isPinVisible ? user.pin_code : "••••••"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopyPin(user)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded-md hover:bg-slate-100"
+                            title="Salin PIN"
+                          >
+                            {copiedPinId === user.id ? (
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generator Acak Kredensial */}
+                    <button
+                      onClick={() => handleGeneratePin(user)}
+                      className="w-full py-2 px-3 text-xs font-semibold bg-white text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg border border-slate-200 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Generate PIN Acak Baru</span>
+                    </button>
+                  </div>
+
+                  {/* Mobile Actions Grid */}
+                  <div className="grid grid-cols-4 gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatus(user)}
+                      className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[10px] font-semibold border transition-colors cursor-pointer ${
+                        user.is_active
+                          ? "bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      }`}
+                    >
+                      {user.is_active ? <UserX className="w-4 h-4 mb-1" /> : <UserCheck className="w-4 h-4 mb-1" />}
+                      <span>{user.is_active ? "Nonaktif" : "Aktifkan"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPreviewUser(user)}
+                      className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[10px] font-semibold bg-indigo-50/50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer"
+                    >
+                      <IdCard className="w-4 h-4 mb-1 text-indigo-600" />
+                      <span>ID Card</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(user)}
+                      className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[10px] font-semibold bg-blue-50/50 text-blue-700 border border-blue-100 hover:bg-blue-100 transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-4 h-4 mb-1 text-blue-600" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePermanent(user.id, user.nama_lengkap)}
+                      className="flex flex-col items-center justify-center py-2 px-1 rounded-xl text-[10px] font-semibold bg-rose-50/50 text-rose-700 border border-rose-100 hover:bg-rose-100 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4 mb-1 text-rose-600" />
+                      <span>Hapus</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -852,7 +1129,7 @@ export const MembersView: React.FC<MembersViewProps> = ({
                   {formRole === "STAFF" ? (
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <label className="text-slate-700 font-semibold">PIN 6-Digit Acak</label>
+                        <label className="text-slate-700 font-semibold">PIN 6-Digit Worklog</label>
                         <button
                           type="button"
                           onClick={() => setFormPin(StorageService.generateRandomPin())}
@@ -871,24 +1148,46 @@ export const MembersView: React.FC<MembersViewProps> = ({
                       />
                     </div>
                   ) : (
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-slate-700 font-semibold">Password Acak</label>
-                        <button
-                          type="button"
-                          onClick={() => setFormPassword(generateRandomPassword())}
-                          className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
-                        >
-                          Acak Ulang
-                        </button>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-slate-700 font-semibold">Password Portal Keuangan</label>
+                          <button
+                            type="button"
+                            onClick={() => setFormPassword(generateRandomPassword())}
+                            className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
+                          >
+                            Acak Ulang
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={formPassword}
+                          onChange={(e) => setFormPassword(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:bg-white"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        required
-                        value={formPassword}
-                        onChange={(e) => setFormPassword(e.target.value)}
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:bg-white"
-                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-slate-700 font-semibold">PIN 6-Digit (Worklog & Approval)</label>
+                          <button
+                            type="button"
+                            onClick={() => setFormPin(StorageService.generateRandomPin())}
+                            className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
+                          >
+                            Acak Ulang
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={formPin}
+                          onChange={(e) => setFormPin(e.target.value)}
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-center text-slate-900 tracking-widest focus:bg-white"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

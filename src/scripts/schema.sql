@@ -18,11 +18,10 @@ CREATE TABLE IF NOT EXISTS users (
     company_id VARCHAR(50) REFERENCES companies(id) ON DELETE CASCADE,
     nama_lengkap VARCHAR(255) NOT NULL,
     panggilan VARCHAR(100),
-    email VARCHAR(255) UNIQUE NOT NULL,
     role VARCHAR(50) DEFAULT 'STAFF',
     divisi VARCHAR(100),
     jabatan VARCHAR(100),
-    pin_code VARCHAR(6) NOT NULL, -- PIN 6-digit keamanan personal
+    pin_code VARCHAR(255) NOT NULL, -- PIN 6-digit atau Password kredensial akun
     avatar VARCHAR(255),
     is_active BOOLEAN DEFAULT TRUE,
     pin_last_updated DATE DEFAULT CURRENT_DATE,

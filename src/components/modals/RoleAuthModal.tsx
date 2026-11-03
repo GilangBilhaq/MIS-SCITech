@@ -130,7 +130,7 @@ export const RoleAuthModal: React.FC<RoleAuthModalProps> = ({
           const validPw = financeSettings.finance_password_hash || config.security.financePasswordDefault;
           if (password === validPw || password === "keuangan123") {
             isFinanceAuth = true;
-            loggedInUser = { id: "USR-006", nama_lengkap: "Admin Keuangan (Anisa)" };
+            loggedInUser = { id: "USR-006", nama_lengkap: "Admin Keuangan" };
           }
         }
 
@@ -147,7 +147,7 @@ export const RoleAuthModal: React.FC<RoleAuthModalProps> = ({
         if (password === validPw || password === "admin123") {
           await new Promise((res) => setTimeout(res, 450));
           setPassword("");
-          onSuccess("MANAJEMEN", { userName: "Executive CEO (Farhan)" });
+          onSuccess("MANAJEMEN", { userName: "Executive CEO" });
           onClose();
         } else {
           triggerError("Master Password Manajemen salah.");

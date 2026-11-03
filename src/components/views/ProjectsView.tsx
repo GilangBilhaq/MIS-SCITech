@@ -20,6 +20,7 @@ import { ApiClient } from "@/lib/apiClient";
 import { generateProjectReportPdf } from "@/lib/pdfGenerator";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface ProjectsViewProps {
   config: TenantConfig;
@@ -316,7 +317,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   <span className="text-slate-400 text-[11px]">Target Deadline:</span>
                   <span className="font-semibold text-slate-800 flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>{proj.deadline ? proj.deadline.split("T")[0].split(" ")[0] : "-"}</span>
+                    <span>{formatDateIndo(proj.deadline)}</span>
                   </span>
                 </div>
 

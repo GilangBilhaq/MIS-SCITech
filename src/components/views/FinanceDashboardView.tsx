@@ -25,6 +25,7 @@ import { ApiClient } from "@/lib/apiClient";
 import { InvoiceGeneratorModal } from "@/components/modals/InvoiceGeneratorModal";
 import { generateFinancialReportPdf } from "@/lib/pdfGenerator";
 import { Toast } from "@/components/ui/Toast";
+import { formatDateIndo, formatRupiah } from "@/lib/formatters";
 
 interface FinanceDashboardViewProps {
   config: TenantConfig;
@@ -92,19 +93,38 @@ export const FinanceDashboardView: React.FC<FinanceDashboardViewProps> = ({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
 
-  // Monthly comparison bars for chart
-  const allMonthlyChartData = [
-    { month: "Nov 25", in: 140, out: 80 },
-    { month: "Des 25", in: 170, out: 95 },
-    { month: "Jan 26", in: 130, out: 70 },
-    { month: "Feb 26", in: 160, out: 75 },
-    { month: "Mar 26", in: 190, out: 85 },
-    {
-      month: "Apr 26",
-      in: Math.round(totalPemasukan / 1000000) || 120,
-      out: Math.round(totalPengeluaran / 1000000) || 60,
-    },
-  ];
+  // Ambang batas kas operasional custom dari settings
+  const financeSettings = StorageService.getFinanceSettings();
+  const minCashAlert = Number(financeSettings?.minimum_cash_alert ?? 25000000);
+
+  // Realtime Monthly comparison bars computed directly from transactions
+  const now = new Date();
+  const monthsList: { key: string; label: string }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const label = d.toLocaleDateString("id-ID", { month: "short", year: "2-digit" });
+    monthsList.push({ key: `${yyyy}-${mm}`, label });
+  }
+
+  const allMonthlyChartData = monthsList.map(({ key, label }) => {
+    const monthTrx = transactions.filter((t) => t.tanggal && t.tanggal.startsWith(key));
+    const totalIn = monthTrx
+      .filter((t) => t.tipe === "PEMASUKAN")
+      .reduce((sum, t) => sum + Number(t.total_harga || 0), 0);
+    const totalOut = monthTrx
+      .filter((t) => t.tipe === "PENGELUARAN")
+      .reduce((sum, t) => sum + Number(t.total_harga || 0), 0);
+
+    return {
+      month: label,
+      in: Math.round(totalIn / 1000000), // In Millions (Juta)
+      out: Math.round(totalOut / 1000000),
+      rawIn: totalIn,
+      rawOut: totalOut,
+    };
+  });
 
   const displayedChartData =
     chartPeriod === "MONTH"
@@ -422,6 +442,34 @@ export const FinanceDashboardView: React.FC<FinanceDashboardViewProps> = ({
               <p className="text-[10px] text-emerald-600 mt-0.5">Surplus operasional kuartal berjalan</p>
             </div>
 
+            {/* Indikator Batas Cadangan Minimum Kas Operasional */}
+            <div className={`p-3.5 rounded-xl border mb-3 ${
+              saldoKas >= minCashAlert
+                ? "bg-emerald-50/60 border-emerald-200 text-emerald-800"
+                : "bg-rose-50/70 border-rose-200 text-rose-800"
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">
+                  Batas Kas Minimum
+                </span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                  saldoKas >= minCashAlert
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-rose-100 text-rose-700 animate-pulse"
+                }`}>
+                  {saldoKas >= minCashAlert ? "Kas Aman" : "Perlu Top-up"}
+                </span>
+              </div>
+              <p className="font-mono font-bold text-xs">
+                Target Cadangan: {formatRupiah(minCashAlert)}
+              </p>
+              <p className="text-[10.5px] leading-tight mt-1 opacity-90">
+                {saldoKas >= minCashAlert
+                  ? `Saldo kas (${formatRupiah(saldoKas)}) melampaui batas cadangan aman operasional.`
+                  : `Peringatan: Saldo kas (${formatRupiah(saldoKas)}) berada di bawah batas cadangan minimum operasional.`}
+              </p>
+            </div>
+
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
               <div className="flex justify-between items-center mb-1">
                 <span className="text-xs font-semibold text-slate-700">Rasio Efisiensi Anggaran</span>
@@ -480,162 +528,125 @@ export const FinanceDashboardView: React.FC<FinanceDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Upcoming Invoice Due Alert & Recent Transactions Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Widget: Jadwal Tagihan & Jatuh Tempo Invoice */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <h3 className="font-bold text-slate-900 text-sm">Monitoring Jatuh Tempo</h3>
-            </div>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-              Proaktif
-            </span>
+      {/* Full-width Recent Financial Transactions */}
+      <div className="w-full bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm">Catatan Transaksi Finansial Terkini</h3>
+            <p className="text-xs text-slate-500">Mutasi kas masuk dan keluar yang telah diverifikasi secara realtime</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Tagihan Klien Terdekat
-                </span>
-                <p className="font-bold text-slate-900 text-xs mt-0.5">PT Mahakarya Digital Nusantara</p>
-                <p className="text-[10px] text-slate-500">INV-SCI/2026/04-099 • Enterprise Setup</p>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-rose-50 text-rose-600 border border-rose-200 whitespace-nowrap">
-                H-8 Jatuh Tempo
-              </span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Filter Tabs */}
+            <div className="inline-flex bg-slate-100 p-0.5 rounded-lg text-xs">
+              <button
+                type="button"
+                onClick={() => setRecentFilter("ALL")}
+                className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
+                  recentFilter === "ALL"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Semua
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecentFilter("PEMASUKAN")}
+                className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
+                  recentFilter === "PEMASUKAN"
+                    ? "bg-white text-emerald-700 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Pemasukan
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecentFilter("PENGELUARAN")}
+                className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
+                  recentFilter === "PENGELUARAN"
+                    ? "bg-white text-rose-700 shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Pengeluaran
+              </button>
             </div>
-            <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 text-xs">
-              <span className="text-[10px] text-slate-600">Nominal Penagihan:</span>
-              <span className="font-mono font-bold text-blue-600">Rp 111.000.000</span>
-            </div>
-          </div>
 
-          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-[11px] text-slate-600 flex items-center justify-between">
-            <span className="text-[10.5px]">Cetak invoice resmi atau kirim berkas tagihan:</span>
             <button
               onClick={() => setIsInvoiceModalOpen(true)}
-              className="font-bold text-blue-700 hover:underline cursor-pointer text-[11px]"
+              className="py-1 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer border border-slate-200 flex items-center gap-1.5 whitespace-nowrap"
             >
-              Buka Invoice →
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span>Buat Invoice</span>
+            </button>
+
+            <button
+              onClick={onNavigateToTransactions}
+              className="py-1 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer border border-blue-200 flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>Kelola Buku Kas</span>
+              <span>→</span>
             </button>
           </div>
         </div>
 
-        {/* Right Table: Recent Transactions Table with Quick Tabs */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Catatan Transaksi Finansial Terkini</h3>
-              <p className="text-xs text-slate-500">Mutasi kas masuk dan keluar yang telah diverifikasi</p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Filter Tabs */}
-              <div className="inline-flex bg-slate-100 p-0.5 rounded-lg text-xs">
-                <button
-                  type="button"
-                  onClick={() => setRecentFilter("ALL")}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
-                    recentFilter === "ALL"
-                      ? "bg-white text-slate-900 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Semua
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecentFilter("PEMASUKAN")}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
-                    recentFilter === "PEMASUKAN"
-                      ? "bg-white text-emerald-700 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Pemasukan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecentFilter("PENGELUARAN")}
-                  className={`px-2.5 py-1 rounded-md font-semibold text-[11px] transition-all cursor-pointer ${
-                    recentFilter === "PENGELUARAN"
-                      ? "bg-white text-rose-700 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Pengeluaran
-                </button>
-              </div>
-
-              <button
-                onClick={onNavigateToTransactions}
-                className="py-1 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer border border-blue-200 flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <span>Kelola Transaksi</span>
-                <span>→</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
-                  <th className="pb-3 px-3">Tanggal</th>
-                  <th className="pb-3 px-3">Deskripsi / Referensi</th>
-                  <th className="pb-3 px-3">Kategori</th>
-                  <th className="pb-3 px-3">Metode</th>
-                  <th className="pb-3 px-3 text-right">Jumlah</th>
-                  <th className="pb-3 px-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredRecentTransactions.length > 0 ? (
-                  filteredRecentTransactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">{t.tanggal}</td>
-                      <td className="py-3 px-3">
-                        <p className="font-bold text-slate-900">{t.nama_item}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{t.deskripsi}</p>
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
-                          {t.kegunaan}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap font-medium text-[11px]">
-                        {t.metode}
-                      </td>
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <span
-                          className={`font-mono font-bold ${
-                            t.tipe === "PEMASUKAN" ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {t.tipe === "PEMASUKAN" ? "+" : "-"}Rp {t.total_harga.toLocaleString("id-ID")}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                          <span>{t.status_verifikasi}</span>
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
-                      Tidak ada transaksi pada filter ini.
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
+                <th className="pb-3 px-3">Tanggal</th>
+                <th className="pb-3 px-3">Deskripsi / Referensi</th>
+                <th className="pb-3 px-3">Kategori</th>
+                <th className="pb-3 px-3">Metode</th>
+                <th className="pb-3 px-3 text-right">Jumlah</th>
+                <th className="pb-3 px-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredRecentTransactions.length > 0 ? (
+                filteredRecentTransactions.map((t) => (
+                  <tr key={t.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">{formatDateIndo(t.tanggal)}</td>
+                    <td className="py-3 px-3">
+                      <p className="font-bold text-slate-900">{t.nama_item}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{t.deskripsi}</p>
+                    </td>
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                        {t.kegunaan}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-600 whitespace-nowrap font-medium text-[11px]">
+                      {t.metode}
+                    </td>
+                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                      <span
+                        className={`font-mono font-bold ${
+                          t.tipe === "PEMASUKAN" ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {t.tipe === "PEMASUKAN" ? "+" : "-"}Rp {t.total_harga.toLocaleString("id-ID")}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        <span>{t.status_verifikasi}</span>
+                      </span>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
+                    Tidak ada transaksi pada filter ini.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

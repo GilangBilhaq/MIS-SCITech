@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { TenantConfig } from "@/config/tenant.config";
 import { Project, KpiEvaluation, Announcement, FinanceSettings, User, Worklog } from "@/types";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface PublicDashboardViewProps {
   config: TenantConfig;
@@ -145,18 +146,28 @@ export const PublicDashboardView: React.FC<PublicDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Rata-Rata Skor Sprint */}
+        {/* Card 2: Rata-Rata Skor Sprint / Realisasi Kinerja */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Rata-Rata Skor Sprint
+              {kpis.length > 0 ? "Rata-Rata Skor KPI" : "Rata-Rata Progres Sprint"}
             </p>
             <h4 className="text-2xl font-black text-slate-900 mt-1">
-              {kpis.length > 0 ? (kpis.reduce((acc, k) => acc + Number(k.skor), 0) / kpis.length).toFixed(1) : "94.8"}%
+              {kpis.length > 0
+                ? `${(kpis.reduce((acc, k) => acc + Number(k.skor || 0), 0) / kpis.length).toFixed(1)}%`
+                : projects.length > 0
+                ? `${(projects.reduce((acc, p) => acc + Number(p.progress_persen || 0), 0) / projects.length).toFixed(1)}%`
+                : "0.0%"}
             </h4>
             <div className="flex items-center gap-1 text-[11px] text-blue-600 font-medium mt-1">
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>Target Tercapai (Target: 90%) • High Velocity</span>
+              <span>
+                {kpis.length > 0
+                  ? "Berdasarkan Evaluasi Kinerja Riil"
+                  : projects.length > 0
+                  ? `Agregasi Progres ${projects.length} Proyek Aktif`
+                  : "Belum ada data evaluasi"}
+              </span>
             </div>
           </div>
           <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
@@ -288,7 +299,7 @@ export const PublicDashboardView: React.FC<PublicDashboardViewProps> = ({
                       PIC: <strong className="text-slate-700">{proj.pic_teknisi}</strong>
                     </span>
                     <span className="text-[11px] text-slate-400 font-medium">
-                      Target: {proj.deadline}
+                      Target: {formatDateIndo(proj.deadline)}
                     </span>
                   </div>
                 </div>
@@ -474,7 +485,7 @@ export const PublicDashboardView: React.FC<PublicDashboardViewProps> = ({
                       </p>
                       <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
                         <span>{w.kategori}</span>
-                        <span>{w.tanggal}</span>
+                        <span>{formatDateIndo(w.tanggal)}</span>
                       </div>
                     </div>
                   );

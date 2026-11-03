@@ -26,6 +26,7 @@ import { ApiClient } from "@/lib/apiClient";
 import { PinVerificationModal } from "@/components/modals/PinVerificationModal";
 import { Toast } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface MonthlyPlanViewProps {
   config: TenantConfig;
@@ -126,7 +127,7 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
   const completedCount = plans.filter((p) => p.is_completed).length;
   const overdueCount = plans.filter((p) => isOverdue(p.deadline, p.is_completed)).length;
   const activeCount = plans.filter((p) => !p.is_completed && !isOverdue(p.deadline, p.is_completed)).length;
-  const totalFilteredHours = filteredPlans.reduce((acc, curr) => acc + (curr.total_jam_tercatat || 0), 0);
+  const totalFilteredHours = filteredPlans.reduce((acc, curr) => acc + Number(curr.total_jam_tercatat || 0), 0);
 
   const handleExportCsv = () => {
     const titleRow = `"LAPORAN RENCANA KERJA BULANAN (MONTHLY PLAN) - ${config.name}"`;
@@ -212,7 +213,7 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
     setFormRencana(plan.rencana_pekerjaan);
     setFormKategori(plan.kategori);
     setFormPrioritas(plan.prioritas);
-    setFormDeadline(plan.deadline);
+    setFormDeadline(plan.deadline ? plan.deadline.split("T")[0] : "");
     setFormTargetOutput(plan.target_output);
   };
 
@@ -688,10 +689,10 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
                       <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium pt-1 border-t border-slate-200/60">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Deadline: {plan.deadline}</span>
+                          <span>Deadline: {formatDateIndo(plan.deadline)}</span>
                         </div>
                         <span className="font-semibold text-slate-700">
-                          {plan.total_jam_tercatat || 0} Jam Log Terkumpul
+                          {Number(plan.total_jam_tercatat || 0)} Jam Log Terkumpul
                         </span>
                       </div>
                     </div>
@@ -714,8 +715,7 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
                     <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">
                       <Clock className="w-3 h-3 text-blue-600" />
                       <span>
-                        {plan.total_jam_tercatat !== undefined ? `${plan.total_jam_tercatat} Jam` : "0 Jam"} (
-                        {plan.total_worklogs || 0} Log)
+                        {Number(plan.total_jam_tercatat || 0)} Jam ({plan.total_worklogs || 0} Log)
                       </span>
                     </div>
                   </div>
@@ -798,7 +798,7 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
                           </div>
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <p className="font-mono text-[11px] text-slate-700">{plan.deadline}</p>
+                          <p className="font-mono text-[11px] text-slate-700">{formatDateIndo(plan.deadline)}</p>
                           {plan.is_completed ? (
                             <span className="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                               🟢 Selesai
@@ -816,7 +816,7 @@ export const MonthlyPlanView: React.FC<MonthlyPlanViewProps> = ({ config, plans,
                         <td className="py-3 px-4 text-center whitespace-nowrap">
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-mono text-[11px] font-bold">
                             <Clock className="w-3 h-3 text-blue-500" />
-                            <span>{plan.total_jam_tercatat || 0} Jam</span>
+                            <span>{Number(plan.total_jam_tercatat || 0)} Jam</span>
                           </span>
                           <p className="text-[10px] text-slate-400 mt-0.5">{plan.total_worklogs || 0} Log</p>
                         </td>

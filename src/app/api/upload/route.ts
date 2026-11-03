@@ -12,6 +12,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "Tidak ada berkas yang diunggah." }, { status: 400 });
     }
 
+    // Validasi batasan ukuran berkas (File Size Limits)
+    // Dokumen (PDF): Maks 5 MB (5 * 1024 * 1024 = 5242880 bytes)
+    // Gambar (QRIS, Logo, Icon): Maks 2 MB (2 * 1024 * 1024 = 2097152 bytes)
+    const isImage = fileType === "qris" || fileType === "logo" || fileType === "icon";
+    const maxSizeBytes = isImage ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxLimitLabel = isImage ? "2 MB" : "5 MB";
+
+    if (file.size > maxSizeBytes) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Ukuran berkas (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimum ${maxLimitLabel}.`,
+        },
+        { status: 413 }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 

@@ -20,6 +20,7 @@ import { ApiClient } from "@/lib/apiClient";
 import { generateFinancialReportPdf } from "@/lib/pdfGenerator";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
+import { formatDateIndo } from "@/lib/formatters";
 
 interface TransactionsViewProps {
   config: TenantConfig;
@@ -66,7 +67,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ config, tran
     setFormTipe(t.tipe);
     setFormNama(t.nama_item);
     setFormDeskripsi(t.deskripsi);
-    setFormTanggal(t.tanggal);
+    setFormTanggal(t.tanggal ? t.tanggal.split("T")[0] : "");
     setFormKegunaan(t.kegunaan);
     setFormJumlah(t.jumlah);
     setFormHargaPcs(t.harga_pcs);
@@ -327,7 +328,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ config, tran
                     <td className="py-3.5 px-4 font-mono font-medium text-slate-700 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{t.tanggal}</span>
+                        <span>{formatDateIndo(t.tanggal)}</span>
                       </div>
                     </td>
 

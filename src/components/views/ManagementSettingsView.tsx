@@ -88,6 +88,19 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
     file: File,
     type: "compro" | "pitch" | "logo" | "icon"
   ) => {
+    // Validasi ukuran berkas frontend
+    const isImage = type === "logo" || type === "icon";
+    const maxSizeBytes = isImage ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxLabel = isImage ? "2 MB" : "5 MB";
+
+    if (file.size > maxSizeBytes) {
+      setToastNotif({
+        type: "error",
+        message: `Ukuran berkas "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimum ${maxLabel}.`,
+      });
+      return;
+    }
+
     try {
       if (type === "compro") setUploadingCompro(true);
       if (type === "pitch") setUploadingPitch(true);
@@ -442,7 +455,7 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">Logo Penuh (JPG, PNG)</span>
+                  <span className="font-bold text-slate-800">Logo Penuh (JPG, PNG) <span className="text-[10px] text-slate-400 font-normal">(Maks. 2 MB)</span></span>
                   <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
                     <Upload className="w-3 h-3" />
                     <span>{uploadingLogo ? "Mengunggah..." : "Unggah Logo"}</span>
@@ -473,7 +486,7 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
 
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">Emblem / Icon (JPG, PNG)</span>
+                  <span className="font-bold text-slate-800">Emblem / Icon (JPG, PNG) <span className="text-[10px] text-slate-400 font-normal">(Maks. 2 MB)</span></span>
                   <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
                     <Upload className="w-3 h-3" />
                     <span>{uploadingIcon ? "Mengunggah..." : "Unggah Icon"}</span>
@@ -618,7 +631,7 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  Company Profile (PDF)
+                  Company Profile (PDF) <span className="text-[10px] text-slate-400 font-normal">(Maks. 5 MB)</span>
                 </span>
                 <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
                   <Upload className="w-3 h-3" />
@@ -680,7 +693,7 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-indigo-600" />
-                  Pitch Deck Bisnis (PDF)
+                  Pitch Deck Bisnis (PDF) <span className="text-[10px] text-slate-400 font-normal">(Maks. 5 MB)</span>
                 </span>
                 <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
                   <Upload className="w-3 h-3" />

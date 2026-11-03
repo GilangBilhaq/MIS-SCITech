@@ -75,11 +75,27 @@ export default function Home() {
         ApiClient.getSettings(compId).catch(() => ({ company: null, finance: StorageService.getFinanceSettings() })),
       ]);
 
-      if (u && u.length > 0) setUsers(u);
-      if (w) setWorklogs(w);
-      if (mp) setMonthlyPlans(mp);
-      if (t) setTransactions(t);
-      if (p) setProjects(p);
+      if (u) {
+        const uniqueU = Array.from(new Map(u.map((user) => [user.id, user])).values());
+        setUsers(uniqueU);
+        StorageService.setUsers(uniqueU);
+      }
+      if (w) {
+        setWorklogs(w);
+        StorageService.setWorklogs(w);
+      }
+      if (mp) {
+        setMonthlyPlans(mp);
+        StorageService.setMonthlyPlans(mp);
+      }
+      if (t) {
+        setTransactions(t);
+        StorageService.setTransactions(t);
+      }
+      if (p) {
+        setProjects(p);
+        StorageService.setProjects(p);
+      }
       if (rabs && rabs.length > 0) {
         setRabList(rabs);
         // Load items for the first rab
@@ -87,9 +103,18 @@ export default function Home() {
           .then((fullRab) => setCurrentRab(fullRab))
           .catch(() => setCurrentRab(StorageService.getRab()));
       }
-      if (kpiData && kpiData.kpis) setKpis(kpiData.kpis);
-      if (a) setAnnouncements(a);
-      if (s && s.finance) setFinanceSettings(s.finance);
+      if (kpiData && kpiData.kpis) {
+        setKpis(kpiData.kpis);
+        StorageService.setKpis(kpiData.kpis);
+      }
+      if (a) {
+        setAnnouncements(a);
+        StorageService.setAnnouncements(a);
+      }
+      if (s && s.finance) {
+        setFinanceSettings(s.finance);
+        StorageService.updateFinanceSettings(s.finance);
+      }
     } catch (e) {
       console.warn("PostgreSQL sync deferred, operating on local cache:", e);
     }
@@ -103,6 +128,10 @@ export default function Home() {
       const savedSession = sessionStorage.getItem("sci_tech_auth_session");
       if (savedSession) {
         const parsed: ActiveAuthSession = JSON.parse(savedSession);
+        if (parsed.userName && parsed.userName.includes("Executive CEO")) {
+          parsed.userName = "Executive CEO";
+          sessionStorage.setItem("sci_tech_auth_session", JSON.stringify(parsed));
+        }
         setAuthSession(parsed);
         setCurrentPortal(parsed.portal);
         if (parsed.portal === "KEUANGAN") setActiveTab("finance_dash");
@@ -118,7 +147,10 @@ export default function Home() {
 
   const handleAuthSuccess = (portal: PortalType, sessionData?: { userId?: string; userName?: string }) => {
     setCurrentPortal(portal);
-    const resolvedName = sessionData?.userName || (portal === "KEUANGAN" ? "Admin Keuangan" : portal === "MANAJEMEN" ? "Executive CEO" : "Teknisi Lapangan");
+    let resolvedName = sessionData?.userName || (portal === "KEUANGAN" ? "Admin Keuangan" : portal === "MANAJEMEN" ? "Executive CEO" : "Teknisi Lapangan");
+    if (resolvedName.includes("Executive CEO")) {
+      resolvedName = "Executive CEO";
+    }
     const portalLabel = portal === "KEUANGAN" ? "Portal Keuangan" : portal === "PROYEK" ? "Portal Proyek & RAB" : "Portal Manajemen / CEO";
 
     const newSession: ActiveAuthSession = {
