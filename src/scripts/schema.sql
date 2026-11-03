@@ -171,6 +171,19 @@ CREATE TABLE IF NOT EXISTS announcements (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 11. Tabel uploaded_files (Penyimpanan Berkas Serverless / Cloud)
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    id VARCHAR(100) PRIMARY KEY,
+    filename VARCHAR(255) UNIQUE NOT NULL,
+    original_name VARCHAR(255),
+    file_type VARCHAR(50),
+    mime_type VARCHAR(100),
+    data_base64 TEXT NOT NULL,
+    size_bytes INT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_filename ON uploaded_files(filename);
+
 -- Indeks Multi-Tenant untuk performa kueri optimal
 CREATE INDEX IF NOT EXISTS idx_users_company ON users(company_id);
 CREATE INDEX IF NOT EXISTS idx_worklogs_company ON worklogs(company_id, user_id, tanggal);

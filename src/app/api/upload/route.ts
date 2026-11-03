@@ -1,6 +1,27 @@
 import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { query } from "@/lib/db";
+
+async function ensureUploadedFilesTable() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS uploaded_files (
+        id VARCHAR(100) PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        original_name VARCHAR(255),
+        file_type VARCHAR(50),
+        mime_type VARCHAR(100),
+        data_base64 TEXT NOT NULL,
+        size_bytes INT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_uploaded_files_filename ON uploaded_files(filename);
+    `);
+  } catch {
+    // Ignore if table already exists or permission
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -106,16 +127,40 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Simpan dengan Nama Aman & Direktori Terisolasi
+    // 3. Generate Nama Berkas Bersih & Parameter
     const cleanPrefix = (fileType === "pitch" ? "pitchdeck" : fileType || "doc").toLowerCase();
     const finalExt = isDocument ? ".pdf" : ext;
     const filename = `${cleanPrefix}_${Date.now()}${finalExt}`;
+    const fileMime = isDocument ? "application/pdf" : file.type || (ext === ".png" ? "image/png" : "image/jpeg");
 
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-    const filePath = path.join(uploadsDir, filename);
+    // 4. Simpan ke Database PostgreSQL (Solusi Serverless Vercel / Cloud Database)
+    // Serverless Vercel memiliki read-only filesystem, sehingga berkas disimpan ke PostgreSQL
+    try {
+      await ensureUploadedFilesTable();
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const base64Data = buffer.toString("base64");
+      await query(
+        `INSERT INTO uploaded_files (id, filename, original_name, file_type, mime_type, data_base64, size_bytes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (filename) DO UPDATE
+         SET data_base64 = EXCLUDED.data_base64,
+             size_bytes = EXCLUDED.size_bytes,
+             created_at = CURRENT_TIMESTAMP`,
+        [fileId, filename, file.name, fileType, fileMime, base64Data, file.size]
+      );
+    } catch (dbErr) {
+      console.warn("Penyimpanan berkas ke database PostgreSQL gagal atau tertunda:", dbErr);
+    }
 
-    await writeFile(filePath, buffer);
+    // 5. Coba simpan ke filesystem lokal jika dapat ditulis (writable)
+    try {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      await mkdir(uploadsDir, { recursive: true });
+      const filePath = path.join(uploadsDir, filename);
+      await writeFile(filePath, buffer);
+    } catch {
+      // Diharapkan di Vercel (read-only filesystem EROFS), berkas tetap tersimpan utuh di database
+    }
 
     const publicUrl = `/uploads/${filename}`;
 

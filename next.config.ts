@@ -56,6 +56,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  /* Rewrite /uploads ke API serverless handler */
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: "/api/files/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
