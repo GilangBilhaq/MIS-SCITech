@@ -88,7 +88,29 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
     file: File,
     type: "compro" | "pitch" | "logo" | "icon"
   ) => {
-    // Validasi ukuran berkas frontend
+    // 1. Validasi Keamanan Ekstensi di Frontend
+    if (type === "compro" || type === "pitch") {
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        setToastNotif({
+          type: "error",
+          message: `Keamanan Sistem: Berkas "${file.name}" ditolak. Hanya dokumen PDF (.pdf) yang diperbolehkan demi keamanan sistem.`,
+        });
+        return;
+      }
+    } else if (type === "logo" || type === "icon") {
+      const allowedExts = [".png", ".jpg", ".jpeg", ".webp"];
+      const ext = "." + file.name.split(".").pop()?.toLowerCase();
+      if (!allowedExts.includes(ext)) {
+        setToastNotif({
+          type: "error",
+          message: `Keamanan Sistem: Berkas "${file.name}" ditolak. Hanya format gambar (.png, .jpg, .jpeg, .webp) yang diperbolehkan.`,
+        });
+        return;
+      }
+    }
+
+    // 2. Validasi Batasan Ukuran Berkas
     const isImage = type === "logo" || type === "icon";
     const maxSizeBytes = isImage ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
     const maxLabel = isImage ? "2 MB" : "5 MB";
@@ -119,17 +141,34 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
         if (type === "compro") {
           setComproUrl(res.url);
           setComproName(file.name);
+          StorageService.updateTenantConfig({
+            assets: {
+              ...config.assets,
+              companyProfileUrl: res.url,
+              companyProfileName: file.name,
+            },
+          });
         } else if (type === "pitch") {
           setPitchDeckUrl(res.url);
           setPitchDeckName(file.name);
+          StorageService.updateTenantConfig({
+            assets: {
+              ...config.assets,
+              pitchDeckUrl: res.url,
+              pitchDeckName: file.name,
+            },
+          });
         } else if (type === "logo") {
           setLogoUrl(res.url);
+          StorageService.updateTenantConfig({ logoUrl: res.url });
         } else if (type === "icon") {
           setIconUrl(res.url);
+          StorageService.updateTenantConfig({ iconUrl: res.url });
         }
+        onRefresh();
         setToastNotif({
           type: "success",
-          message: `Berkas "${file.name}" berhasil diunggah.`,
+          message: `Berkas "${file.name}" berhasil diunggah dan disimpan ke sistem.`,
         });
       }
     } catch (err: unknown) {
@@ -144,6 +183,40 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
       if (type === "logo") setUploadingLogo(false);
       if (type === "icon") setUploadingIcon(false);
     }
+  };
+
+  const handleRemoveCompro = () => {
+    setComproUrl("");
+    setComproName("Company Profile SCI Tech (PDF)");
+    StorageService.updateTenantConfig({
+      assets: {
+        ...config.assets,
+        companyProfileUrl: "",
+        companyProfileName: "Company Profile SCI Tech (PDF)",
+      },
+    });
+    onRefresh();
+    setToastNotif({
+      type: "info",
+      message: "Dokumen Company Profile berhasil dihapus dari sistem.",
+    });
+  };
+
+  const handleRemovePitchDeck = () => {
+    setPitchDeckUrl("");
+    setPitchDeckName("Pitch Deck Presentasi Bisnis (PDF)");
+    StorageService.updateTenantConfig({
+      assets: {
+        ...config.assets,
+        pitchDeckUrl: "",
+        pitchDeckName: "Pitch Deck Presentasi Bisnis (PDF)",
+      },
+    });
+    onRefresh();
+    setToastNotif({
+      type: "info",
+      message: "Dokumen Pitch Deck berhasil dihapus dari sistem.",
+    });
   };
 
   // Save Settings
@@ -631,61 +704,103 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  Company Profile (PDF) <span className="text-[10px] text-slate-400 font-normal">(Maks. 5 MB)</span>
+                  Company Profile (PDF)
                 </span>
-                <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
-                  <Upload className="w-3 h-3" />
-                  <span>{uploadingCompro ? "Mengunggah..." : "Unggah PDF"}</span>
+                <span className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
+                  Maks. 5 MB (PDF Only)
+                </span>
+              </div>
+
+              {/* Status & Preview Dokumen */}
+              {comproUrl && comproUrl !== "#" ? (
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate" title={comproName}>
+                          {comproName || "Company Profile (PDF)"}
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Dokumen PDF Aktif
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCompro}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Hapus Berkas PDF"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex items-center gap-2">
+                    <a
+                      href={comproUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Buka / Unduh PDF</span>
+                    </a>
+                    <label className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingCompro ? "Mengunggah..." : "Ganti PDF"}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        disabled={uploadingCompro}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleFileUpload(f, "compro");
+                          e.target.value = "";
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group">
+                  <div className="w-9 h-9 rounded-full bg-blue-50 group-hover:bg-blue-100 text-blue-600 flex items-center justify-center mb-1.5 transition-colors">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-blue-700">
+                    {uploadingCompro ? "Mengunggah & Memvalidasi..." : "Pilih & Unggah Berkas PDF"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    Hanya berkas dokumen PDF (.pdf) • Maks. 5 MB
+                  </span>
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,application/pdf"
                     disabled={uploadingCompro}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (f) handleFileUpload(f, "compro");
+                      e.target.value = "";
                     }}
                     className="hidden"
                   />
                 </label>
-              </div>
+              )}
 
               <div>
-                <label className="block text-slate-500 font-medium mb-1 text-[11px]">Nama Label Tampilan</label>
+                <label className="block text-slate-500 font-medium mb-1 text-[11px]">Nama Label Tampilan (Tombol Unduh)</label>
                 <input
                   type="text"
                   value={comproName}
                   onChange={(e) => setComproName(e.target.value)}
+                  placeholder="Contoh: Company Profile SCI Tech (PDF)"
                   className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs"
                 />
               </div>
-
-              <div>
-                <label className="block text-slate-500 font-medium mb-1 text-[11px]">URL Berkas</label>
-                <input
-                  type="text"
-                  value={comproUrl}
-                  onChange={(e) => setComproUrl(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 font-mono text-[11px]"
-                />
-              </div>
-
-              {comproUrl && (
-                <div className="pt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Berkas Aktif
-                  </span>
-                  <a
-                    href={comproUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
-                  >
-                    <span>Buka Berkas</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
             </div>
 
             {/* Asset 2: Pitch Deck */}
@@ -693,61 +808,103 @@ export const ManagementSettingsView: React.FC<ManagementSettingsViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-indigo-600" />
-                  Pitch Deck Bisnis (PDF) <span className="text-[10px] text-slate-400 font-normal">(Maks. 5 MB)</span>
+                  Pitch Deck Bisnis (PDF)
                 </span>
-                <label className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
-                  <Upload className="w-3 h-3" />
-                  <span>{uploadingPitch ? "Mengunggah..." : "Unggah PDF"}</span>
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">
+                  Maks. 5 MB (PDF Only)
+                </span>
+              </div>
+
+              {/* Status & Preview Dokumen */}
+              {pitchDeckUrl && pitchDeckUrl !== "#" ? (
+                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate" title={pitchDeckName}>
+                          {pitchDeckName || "Pitch Deck Bisnis (PDF)"}
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Dokumen PDF Aktif
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePitchDeck}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Hapus Berkas PDF"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex items-center gap-2">
+                    <a
+                      href={pitchDeckUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Buka / Unduh PDF</span>
+                    </a>
+                    <label className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingPitch ? "Mengunggah..." : "Ganti PDF"}</span>
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        disabled={uploadingPitch}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleFileUpload(f, "pitch");
+                          e.target.value = "";
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/40 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group">
+                  <div className="w-9 h-9 rounded-full bg-indigo-50 group-hover:bg-indigo-100 text-indigo-600 flex items-center justify-center mb-1.5 transition-colors">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700">
+                    {uploadingPitch ? "Mengunggah & Memvalidasi..." : "Pilih & Unggah Berkas PDF"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    Hanya berkas dokumen PDF (.pdf) • Maks. 5 MB
+                  </span>
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,application/pdf"
                     disabled={uploadingPitch}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (f) handleFileUpload(f, "pitch");
+                      e.target.value = "";
                     }}
                     className="hidden"
                   />
                 </label>
-              </div>
+              )}
 
               <div>
-                <label className="block text-slate-500 font-medium mb-1 text-[11px]">Nama Label Tampilan</label>
+                <label className="block text-slate-500 font-medium mb-1 text-[11px]">Nama Label Tampilan (Tombol Unduh)</label>
                 <input
                   type="text"
                   value={pitchDeckName}
                   onChange={(e) => setPitchDeckName(e.target.value)}
+                  placeholder="Contoh: Pitch Deck Presentasi Bisnis (PDF)"
                   className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs"
                 />
               </div>
-
-              <div>
-                <label className="block text-slate-500 font-medium mb-1 text-[11px]">URL Berkas</label>
-                <input
-                  type="text"
-                  value={pitchDeckUrl}
-                  onChange={(e) => setPitchDeckUrl(e.target.value)}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-slate-800 font-mono text-[11px]"
-                />
-              </div>
-
-              {pitchDeckUrl && (
-                <div className="pt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Berkas Aktif
-                  </span>
-                  <a
-                    href={pitchDeckUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
-                  >
-                    <span>Buka Berkas</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
             </div>
           </div>
 

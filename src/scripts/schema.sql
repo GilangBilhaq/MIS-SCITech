@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS finance_settings (
     qr_image_url TEXT,
     show_cash_to_public BOOLEAN DEFAULT FALSE,
     finance_password_hash VARCHAR(255) DEFAULT 'keuangan123',
+    default_ppn_percent INT DEFAULT 11,
+    invoice_prefix VARCHAR(100) DEFAULT 'INV-SCI/{YYYY}/{MM}',
+    default_payment_terms_days INT DEFAULT 14,
+    default_invoice_notes TEXT DEFAULT 'Pembayaran dianggap sah apabila dana telah efektif masuk ke rekening resmi PT Solusi Cerdas Infrastructure Technology. Mohon sertakan nomor invoice pada berita transfer.',
+    minimum_cash_alert NUMERIC(15, 2) DEFAULT 25000000,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

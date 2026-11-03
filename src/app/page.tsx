@@ -112,8 +112,12 @@ export default function Home() {
         StorageService.setAnnouncements(a);
       }
       if (s && s.finance) {
-        setFinanceSettings(s.finance);
-        StorageService.updateFinanceSettings(s.finance);
+        const mergedFinance = {
+          ...StorageService.getFinanceSettings(),
+          ...s.finance,
+        };
+        setFinanceSettings(mergedFinance);
+        StorageService.updateFinanceSettings(mergedFinance);
       }
     } catch (e) {
       console.warn("PostgreSQL sync deferred, operating on local cache:", e);
@@ -201,7 +205,7 @@ export default function Home() {
   };
 
   const handleDownloadCompro = () => {
-    if (config.assets.companyProfileUrl && config.assets.companyProfileUrl.startsWith("/uploads")) {
+    if (config.assets.companyProfileUrl && config.assets.companyProfileUrl !== "#") {
       window.open(config.assets.companyProfileUrl, "_blank");
     } else {
       // Create branded downloadable document blob
@@ -217,7 +221,7 @@ export default function Home() {
   };
 
   const handleDownloadPitchDeck = () => {
-    if (config.assets.pitchDeckUrl && config.assets.pitchDeckUrl.startsWith("/uploads")) {
+    if (config.assets.pitchDeckUrl && config.assets.pitchDeckUrl !== "#") {
       window.open(config.assets.pitchDeckUrl, "_blank");
     } else {
       const content = `PITCH DECK PRESENTASI INVESTOR\n${config.name} (${config.legalName})\nSolusi Infrastruktur & Multi-Tenant Enterprise OS\nKontak: ${config.contact.email}\n\nVersi 2026. Hak Cipta Dilindungi.`;

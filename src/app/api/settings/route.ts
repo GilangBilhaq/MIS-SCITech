@@ -1,10 +1,27 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
+async function ensureFinanceColumns() {
+  try {
+    await query(`
+      ALTER TABLE finance_settings 
+      ADD COLUMN IF NOT EXISTS default_ppn_percent INT DEFAULT 11,
+      ADD COLUMN IF NOT EXISTS invoice_prefix VARCHAR(100) DEFAULT 'INV-SCI/{YYYY}/{MM}',
+      ADD COLUMN IF NOT EXISTS default_payment_terms_days INT DEFAULT 14,
+      ADD COLUMN IF NOT EXISTS default_invoice_notes TEXT DEFAULT 'Pembayaran dianggap sah apabila dana telah efektif masuk ke rekening resmi PT Solusi Cerdas Infrastructure Technology. Mohon sertakan nomor invoice pada berita transfer.',
+      ADD COLUMN IF NOT EXISTS minimum_cash_alert NUMERIC(15, 2) DEFAULT 25000000;
+    `);
+  } catch {
+    // Ignore if table/columns already updated or running in restricted mode
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId") || "sci-tech-01";
+
+    await ensureFinanceColumns();
 
     const compRes = await query(`SELECT * FROM companies WHERE id = $1`, [companyId]);
     const finRes = await query(`SELECT * FROM finance_settings WHERE company_id = $1`, [companyId]);
@@ -36,7 +53,20 @@ export async function PUT(request: Request) {
         [nama_perusahaan, domain_sub, compId]
       );
     } else if (type === "FINANCE" && financeData) {
-      const { bank_name, account_number, account_holder, show_cash_to_public, qr_image_url } = financeData;
+      await ensureFinanceColumns();
+      const {
+        bank_name,
+        account_number,
+        account_holder,
+        show_cash_to_public,
+        qr_image_url,
+        default_ppn_percent,
+        invoice_prefix,
+        default_payment_terms_days,
+        default_invoice_notes,
+        minimum_cash_alert,
+      } = financeData;
+
       await query(
         `UPDATE finance_settings
          SET bank_name = COALESCE($1, bank_name),
@@ -44,9 +74,26 @@ export async function PUT(request: Request) {
              account_holder = COALESCE($3, account_holder),
              show_cash_to_public = COALESCE($4, show_cash_to_public),
              qr_image_url = COALESCE($5, qr_image_url),
+             default_ppn_percent = COALESCE($6, default_ppn_percent),
+             invoice_prefix = COALESCE($7, invoice_prefix),
+             default_payment_terms_days = COALESCE($8, default_payment_terms_days),
+             default_invoice_notes = COALESCE($9, default_invoice_notes),
+             minimum_cash_alert = COALESCE($10, minimum_cash_alert),
              updated_at = CURRENT_TIMESTAMP
-         WHERE company_id = $6`,
-        [bank_name, account_number, account_holder, show_cash_to_public, qr_image_url, compId]
+         WHERE company_id = $11`,
+        [
+          bank_name,
+          account_number,
+          account_holder,
+          show_cash_to_public,
+          qr_image_url,
+          default_ppn_percent,
+          invoice_prefix,
+          default_payment_terms_days,
+          default_invoice_notes,
+          minimum_cash_alert,
+          compId,
+        ]
       );
     } else if (type === "PASSWORD_FINANCE" && passwordData) {
       const { newPassword } = passwordData;

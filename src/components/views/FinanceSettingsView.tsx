@@ -212,17 +212,10 @@ export const FinanceSettingsView: React.FC<FinanceSettingsViewProps> = ({
       minimum_cash_alert: Number(minCashAlert),
     };
 
-    try {
-      await ApiClient.updateSettings({
-        type: "FINANCE",
-        company_id: config.id,
-        financeData: payload,
-      });
-    } catch {
-      StorageService.updateFinanceSettings(payload);
-    }
+    // 1. Simpan segera ke local storage cache (optimistic update)
+    StorageService.updateFinanceSettings(payload);
 
-    // Also update tenant config for white-label sync
+    // 2. Perbarui tenant config untuk white-label
     StorageService.updateTenantConfig({
       finance: {
         ...config.finance,
@@ -232,6 +225,17 @@ export const FinanceSettingsView: React.FC<FinanceSettingsViewProps> = ({
         showCashToPublic,
       },
     });
+
+    // 3. Sinkronkan ke database PostgreSQL di background
+    try {
+      await ApiClient.updateSettings({
+        type: "FINANCE",
+        company_id: config.id,
+        financeData: payload,
+      });
+    } catch (err) {
+      console.warn("Sinkronisasi database keuangan offline, data tersimpan di local cache:", err);
+    }
 
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
