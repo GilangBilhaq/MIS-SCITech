@@ -133,6 +133,12 @@ export const FinanceDashboardView: React.FC<FinanceDashboardViewProps> = ({
       ? allMonthlyChartData.slice(-3)
       : allMonthlyChartData;
 
+  // Skala Dinamis: cari nilai transaksi tertinggi pada periode aktif (fallback 1 agar tidak divide by zero)
+  const maxRawChartVal = Math.max(
+    ...displayedChartData.map((d) => Math.max(d.rawIn || 0, d.rawOut || 0)),
+    1
+  );
+
   // Filtered recent transactions
   const filteredRecentTransactions = transactions
     .filter((t) => {
@@ -389,36 +395,59 @@ export const FinanceDashboardView: React.FC<FinanceDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Bar Visualization */}
+          {/* Bar Visualization with Dynamic Auto-Scaling */}
           <div className="overflow-x-auto pb-2">
             <div className="h-56 min-w-[340px] flex items-end justify-between gap-3 pt-6 px-4">
-              {displayedChartData.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                  <div className="w-full flex items-end justify-center gap-1.5 h-44">
-                    {/* Income bar */}
-                    <div
-                      className="w-5 bg-blue-600 rounded-t-sm transition-all duration-500 hover:bg-blue-700 relative group"
-                      style={{ height: `${Math.min(100, (d.in / 240) * 100)}%` }}
-                    >
-                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-mono py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        Rp {d.in} Jt
+              {displayedChartData.map((d, i) => {
+                // Skala dinamis proporsional terhadap nilai transaksi terbesar (maksimum 90% dari container agar tooltip muat)
+                const inHeight =
+                  d.rawIn > 0
+                    ? Math.max(8, Math.min(92, (d.rawIn / maxRawChartVal) * 90))
+                    : 0;
+                const outHeight =
+                  d.rawOut > 0
+                    ? Math.max(8, Math.min(92, (d.rawOut / maxRawChartVal) * 90))
+                    : 0;
+
+                const formatTooltip = (val: number) => {
+                  if (!val || val === 0) return "Rp 0";
+                  if (val >= 1000000000) {
+                    return `Rp ${(val / 1000000000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`;
+                  }
+                  if (val >= 1000000) {
+                    return `Rp ${(val / 1000000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} Jt`;
+                  }
+                  return `Rp ${(val / 1000).toLocaleString("id-ID")} Rb`;
+                };
+
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <div className="w-full flex items-end justify-center gap-1.5 h-44">
+                      {/* Income bar */}
+                      <div
+                        className="w-5 bg-blue-600 rounded-t-sm transition-all duration-500 hover:bg-blue-700 relative group cursor-pointer"
+                        style={{ height: `${inHeight}%` }}
+                      >
+                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-mono py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 shadow-xs">
+                          {formatTooltip(d.rawIn)}
+                        </div>
+                      </div>
+                      {/* Expense bar */}
+                      <div
+                        className="w-5 bg-slate-400 rounded-t-sm transition-all duration-500 hover:bg-slate-500 relative group cursor-pointer"
+                        style={{ height: `${outHeight}%` }}
+                      >
+                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-mono py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 shadow-xs">
+                          {formatTooltip(d.rawOut)}
+                        </div>
                       </div>
                     </div>
-                    {/* Expense bar */}
-                    <div
-                      className="w-5 bg-slate-400 rounded-t-sm transition-all duration-500 hover:bg-slate-500 relative group"
-                      style={{ height: `${Math.min(100, (d.out / 240) * 100)}%` }}
-                    >
-                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-mono py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        Rp {d.out} Jt
-                      </div>
-                    </div>
+                    <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">
+                      {d.month}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">
-                    {d.month}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
